@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: sentinelai-backend
+    environment:
+      - SERVICE_TYPE=backend
+      - OLLAMA_HOST=http://localhost:11434
+      - DATA_DIR=/app/data
+      - VECTOR_STORE_DIR=/app/data/vectorstore
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    network_mode: "host"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: sentinelai-frontend
+    environment:
+      - SERVICE_TYPE=frontend
+      - API_BASE=http://localhost:8000
+    network_mode: "host"
+    restart: unless-stopped
+
+networks:
+  sentinelai-network:
+    driver: bridge
+
+volumes:
+  sentinelai-data:
+    driver: local

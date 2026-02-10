@@ -3,6 +3,7 @@ SentinelAI Backend - DSGVO-Compliant Local LLM System
 Main FastAPI Application
 """
 import os
+import asyncio
 import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -18,13 +19,12 @@ from services.document_service import DocumentService
 from services.vector_store import VectorStoreService
 from services.pii_service import PIIService
 from services.audit_service import AuditService
+from services.nlp_analysis_service import NLPAnalysisService  # type: ignore[import]
+from services.database_service import DatabaseService
 from utils.config import settings
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global service instances
@@ -33,16 +33,55 @@ document_service: Optional[DocumentService] = None
 vector_store: Optional[VectorStoreService] = None
 pii_service: Optional[PIIService] = None
 audit_service: Optional[AuditService] = None
+nlp_service: Optional[NLPAnalysisService] = None
+database_service: Optional[DatabaseService] = None
+
+# Ollama connection status
+ollama_connected: bool = False
+
+
+async def _wait_for_ollama(llm: LLMService, max_retries: int = 5) -> bool:
+    """
+    Wait for Ollama to become available with exponential backoff.
+    
+    Args:
+        llm: LLM service instance
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        True if connected, False if all retries exhausted
+    """
+    delays = [2, 4, 8, 16, 30]  # Exponential backoff in seconds
+    
+    for attempt in range(1, max_retries + 1):
+        if await llm.health_check():
+            return True
+        
+        if attempt < max_retries:
+            delay = delays[min(attempt - 1, len(delays) - 1)]
+            logger.warning(
+                f"⏳ Ollama nicht erreichbar (Versuch {attempt}/{max_retries}). "
+                f"Nächster Versuch in {delay}s..."
+            )
+            await asyncio.sleep(delay)
+        else:
+            logger.error(
+                f"❌ Ollama nach {max_retries} Versuchen nicht erreichbar. "
+                f"LLM-Features sind deaktiviert. Starte Ollama mit: ollama serve"
+            )
+    
+    return False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager - initialize and cleanup services."""
-    global llm_service, document_service, vector_store, pii_service, audit_service
+    global llm_service, document_service, vector_store, pii_service, audit_service, nlp_service, database_service, ollama_connected
     
     logger.info("🚀 Initializing SentinelAI Backend...")
     
     # Initialize services
+    database_service = DatabaseService(db_path="data/sentinel.db")
     audit_service = AuditService(data_dir=settings.DATA_DIR)
     await audit_service.log("system", "startup", "SentinelAI Backend starting")
     
@@ -53,6 +92,7 @@ async def lifespan(app: FastAPI):
         model_name=settings.LLM_MODEL,
         embedding_model=settings.EMBEDDING_MODEL
     )
+    nlp_service = NLPAnalysisService(llm_service=llm_service)
     document_service = DocumentService(
         vector_store=vector_store,
         pii_service=pii_service,
@@ -60,11 +100,12 @@ async def lifespan(app: FastAPI):
         audit_service=audit_service
     )
     
-    # Check Ollama connection
-    if await llm_service.health_check():
+    # Check Ollama connection with retry loop
+    ollama_connected = await _wait_for_ollama(llm_service)
+    if ollama_connected:
         logger.info(f"✅ Connected to Ollama ({settings.LLM_MODEL})")
     else:
-        logger.warning("⚠️ Ollama not available - LLM features disabled")
+        logger.warning("⚠️ Backend startet im eingeschränkten Modus (ohne LLM)")
     
     logger.info("✅ SentinelAI Backend ready")
     
@@ -85,7 +126,12 @@ app = FastAPI(
 # CORS for local frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "http://localhost:8501",   # Streamlit Frontend
+        "http://127.0.0.1:8501"    # Streamlit Frontend (127.0.0.1)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -259,16 +305,36 @@ async def upload_document(
     # Validate file type
     allowed_types = {".pdf", ".docx", ".doc", ".txt", ".md"}
     file_ext = os.path.splitext(file.filename)[1].lower()
+    
+    # Handle edge case: files starting with . (like .txt) - treat as extension-less
+    if not file_ext and file.filename.startswith('.'):
+        # Filename is like ".txt" - treat the whole thing as extension
+        file_ext = file.filename.lower()
+    
+    # Log for debugging
+    logger.info(f"Upload attempt - Filename: '{file.filename}', Extension: '{file_ext}'")
+    
     if file_ext not in allowed_types:
-        raise HTTPException(400, f"Unsupported file type. Allowed: {allowed_types}")
+        logger.warning(f"Rejected file type: {file_ext} for file: {file.filename}")
+        raise HTTPException(400, f"Unsupported file type '{file_ext}'. Allowed: {allowed_types}")
     
     # Process document
     content = await file.read()
-    result = await document_service.process_document(
-        filename=file.filename,
-        content=content,
-        file_type=file_ext
-    )
+    
+    try:
+        result = await document_service.process_document(
+            filename=file.filename,
+            content=content,
+            file_type=file_ext
+        )
+    except ValueError as e:
+        # Handle corrupt or unparseable files
+        logger.warning(f"Document processing failed for {file.filename}: {e}")
+        raise HTTPException(400, f"Dokumentverarbeitung fehlgeschlagen: {str(e)}")
+    except Exception as e:
+        # Unexpected errors
+        logger.error(f"Unexpected error processing {file.filename}: {e}")
+        raise HTTPException(500, "Interner Fehler bei der Dokumentverarbeitung")
     
     await audit_service.log(
         user_id="system",
@@ -355,6 +421,114 @@ async def delete_user_data(user_id: str):
     return {"status": "deletion_initiated", "user_id": user_id}
 
 
+# ============== NLP ANALYSIS ENDPOINTS ==============
+
+class TextAnalysisRequest(BaseModel):
+    text: str
+    max_keywords: int = 10
+    max_topics: int = 5
+
+
+class TextAnalysisResponse(BaseModel):
+    keywords: list[str]
+    topics: list[dict]
+    summary: str
+    raw_text_length: int
+
+
+@app.post("/api/analyze/text", response_model=TextAnalysisResponse)
+async def analyze_text(request: TextAnalysisRequest):
+    """Analyze text for keywords and topics using local LLM."""
+    if not nlp_service:
+        raise HTTPException(503, "NLP service not available")
+    
+    result = await nlp_service.analyze_text(
+        text=request.text,
+        max_keywords=request.max_keywords,
+        max_topics=request.max_topics
+    )
+    
+    await audit_service.log(
+        user_id="system",
+        action="nlp_analysis",
+        details=f"Text analysis: {len(request.text)} chars, {len(result.keywords)} keywords"
+    )
+    
+    return TextAnalysisResponse(
+        keywords=result.keywords,
+        topics=result.topics,
+        summary=result.summary,
+        raw_text_length=result.raw_text_length
+    )
+
+
+@app.get("/api/documents/{document_id}/analysis")
+async def get_document_analysis(document_id: str):
+    """Get NLP analysis for a document (keywords, topics)."""
+    if not document_service or not nlp_service:
+        raise HTTPException(503, "Service not available")
+    
+    doc = await document_service.get_document(document_id)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    
+    # Get document chunks
+    chunks = await vector_store.get_document_chunks(document_id)
+    if not chunks:
+        raise HTTPException(404, "No chunks found for document")
+    
+    # Extract text from chunks
+    chunk_texts = [c["content"] for c in chunks]
+    
+    # Perform analysis
+    result = await nlp_service.analyze_document_chunks(chunk_texts)
+    
+    return {
+        "document_id": document_id,
+        "filename": doc.get("filename"),
+        "keywords": result.keywords,
+        "topics": result.topics,
+        "summary": result.summary,
+        "analyzed_chunks": len(chunk_texts)
+    }
+
+
+@app.get("/api/documents/{document_id}/similar")
+async def get_similar_documents(document_id: str, k: int = 5):
+    """Find documents similar to the given one based on embedding comparison."""
+    if not vector_store:
+        raise HTTPException(503, "Vector store not available")
+    
+    similar_docs = await vector_store.find_similar_documents(document_id, k=k)
+    
+    return {
+        "document_id": document_id,
+        "similar_documents": similar_docs
+    }
+
+
+@app.get("/api/search/quality")
+async def get_search_quality(query: str, k: int = 5):
+    """Search with quality metrics for RAG evaluation."""
+    if not vector_store or not llm_service:
+        raise HTTPException(503, "Services not available")
+    
+    # Generate embedding for query
+    query_embedding = await llm_service.generate_embedding(query)
+    
+    # Perform search
+    results = await vector_store.search(query, query_embedding=query_embedding, k=k)
+    
+    # Calculate quality metrics
+    metrics = await vector_store.get_search_quality_metrics(results)
+    
+    return {
+        "query": query,
+        "results": results,
+        "quality_metrics": metrics
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
@@ -363,3 +537,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
+

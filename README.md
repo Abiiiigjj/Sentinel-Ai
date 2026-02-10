@@ -1,194 +1,160 @@
-# SentinelAI - DSGVO-konforme Lokale KI
+# SentinelAI Box - Production Ready
 
-<div align="center">
-  <h3>🛡️ Sichere, Offline-fähige KI-Dokumentenanalyse</h3>
-  <p>EU AI Act & DSGVO konform • Mistral NeMo 12B • 100% Datensouveränität</p>
-</div>
+**100% Lokale KI-Dokumentenverarbeitung für Kleinunternehmer**
 
----
+## 🚀 Quick Start
 
-## 🎯 Überblick
+```bash
+./start_box.sh
+```
 
-SentinelAI ist eine vollständig lokale KI-Lösung für Dokumentenanalyse und intelligente Assistenz. Alle Daten bleiben auf Ihrem Rechner - keine Cloud, keine API-Aufrufe, keine Kompromisse bei der Datensicherheit.
-
-### ✨ Features
-
-- 🤖 **Lokales LLM**: Mistral NeMo 12B mit 12GB VRAM
-- 📄 **Dokumentenanalyse**: PDF, DOCX, TXT, Markdown
-- 🔍 **RAG-System**: Kontextbasierte Antworten aus Ihren Dokumenten
-- 🛡️ **PII-Erkennung**: Automatische Maskierung sensibler Daten
-- 📊 **Compliance Dashboard**: DSGVO & EU AI Act Übersicht
-- 🔒 **Audit Logging**: Lückenlose Protokollierung
+Das war's! Die WebUI öffnet sich automatisch unter `http://localhost:8501`
 
 ---
 
-## 🚀 Schnellstart
+## 📋 Voraussetzungen
 
-### Voraussetzungen
-
-- Docker & Docker Compose
-- NVIDIA GPU mit 12GB+ VRAM (RTX 3060/4070 oder besser)
-- NVIDIA Container Toolkit
-- 16GB+ RAM empfohlen
+- **Docker & Docker Compose** installiert
+- **Ollama** (optional, für KI-Features): `ollama serve`
+- **8GB RAM** empfohlen
+- **10GB Festplattenspeicher**
 
 ### Installation
 
+**Ubuntu/Debian:**
 ```bash
-# Repository klonen
-cd /home/ahmet/Downloads/SentinelAi
-
-# Setup-Skript ausführen
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+sudo apt install docker.io docker-compose
+sudo usermod -aG docker $USER
+# Neu einloggen für Gruppenänderung
 ```
 
-Das Setup-Skript:
-1. ✅ Überprüft Docker & GPU
-2. ✅ Startet Ollama Container
-3. ✅ Lädt Mistral NeMo 12B herunter (~7GB)
-4. ✅ Lädt Embedding-Modell herunter
-5. ✅ Startet alle Services
-
-### Manueller Start
-
+**Ollama (für KI-Analyse):**
 ```bash
-# Services starten
-docker compose up -d
-
-# Logs verfolgen
-docker compose logs -f
-
-# Services stoppen
-docker compose down
-```
-
-### Frontend starten (Entwicklung)
-
-```bash
-npm install
-npm run dev
+curl https://ollama.ai/install.sh | sh
+ollama pull mistral-nemo:12b-instruct-2407-q4_K_M
+ollama serve
 ```
 
 ---
 
-## 📁 Projektstruktur
+## 🛡️ Features
+
+✅ **DSGVO-konform** - Alle Daten bleiben lokal  
+✅ **PII-Erkennung** - Automatische Erkennung personenbezogener Daten  
+✅ **Semantische Suche** - RAG-basierte Dokumentensuche  
+✅ **Status-Workflow** - Neu → In Prüfung → Erledigt  
+✅ **Audit-Log** - Manipulationssicheres Compliance-Log  
+✅ **Kiosk-UI** - Touchscreen-optimiert, professionell  
+
+---
+
+## 📊 Architektur
+
+```
+SentinelAI Box
+├── Backend (FastAPI)
+│   ├── LLM Service (Ollama + Mistral NeMo)
+│   ├── Vector Store (ChromaDB)
+│   ├── PII Detection (spaCy de_core_news_lg)
+│   └── SQLite Database (persistent)
+├── Frontend (Streamlit)
+│   ├── Cockpit (Übersicht)
+│   ├── Posteingang (Upload)
+│   └── Archiv (Suche)
+└── Data (persistent volume)
+    ├── sentinel.db (Dokumente + Audit-Log)
+    ├── vectorstore/ (Embeddings)
+    └── documents/ (Uploads)
+```
+
+---
+
+## 🔧 Verwaltung
+
+**Status prüfen:**
+```bash
+docker-compose -f deploy/docker-compose.yml ps
+```
+
+**Logs anzeigen:**
+```bash
+docker-compose -f deploy/docker-compose.yml logs -f
+```
+
+**System stoppen:**
+```bash
+docker-compose -f deploy/docker-compose.yml down
+```
+
+**Daten löschen (ACHTUNG!):**
+```bash
+docker-compose -f deploy/docker-compose.yml down -v
+rm -rf data/
+```
+
+---
+
+## 📁 Verzeichnisstruktur
 
 ```
 SentinelAi/
-├── backend/                 # Python FastAPI Backend
-│   ├── main.py              # API Endpoints
-│   ├── services/            # Business Logic
-│   │   ├── llm_service.py   # Ollama Integration
-│   │   ├── vector_store.py  # ChromaDB
-│   │   ├── pii_service.py   # PII Erkennung
-│   │   ├── document_service.py
-│   │   └── audit_service.py
-│   ├── utils/
-│   │   └── config.py        # Einstellungen
-│   └── Dockerfile
-├── components/              # React Komponenten
-├── services/
-│   └── geminiService.ts     # Frontend API Client
-├── docker-compose.yml       # Container Orchestrierung
-├── scripts/
-│   └── setup.sh             # Automatisches Setup
-└── data/                    # Persistente Daten (gitignored)
-    ├── vectorstore/         # ChromaDB
-    ├── documents/           # Dokumentmetadaten
-    └── audit/               # Audit Logs
+├── src/
+│   ├── backend/        # FastAPI Backend
+│   └── frontend/       # Streamlit WebUI
+├── data/              # Persistent (bleibt bei Updates)
+│   ├── sentinel.db
+│   ├── vectorstore/
+│   └── documents/
+├── logs/              # System-Logs
+├── deploy/            # Docker-Konfiguration
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── entrypoint.sh
+└── start_box.sh       # One-Click Start
 ```
 
 ---
 
-## 🔧 Konfiguration
+## 🔐 Sicherheit & Compliance
 
-### Umgebungsvariablen
-
-Kopieren Sie `.env.example` nach `.env` und passen Sie an:
-
-```bash
-# LLM Modell (Standard: Mistral NeMo 12B)
-LLM_MODEL=mistral-nemo:12b-instruct-2407-q4_K_M
-
-# Für schwächere GPUs (8GB VRAM):
-LLM_MODEL=mistral:7b-instruct-q4_K_M
-
-# PII-Erkennung deaktivieren
-PII_DETECTION_ENABLED=false
-```
-
-### Modelle wechseln
-
-```bash
-# Verfügbare Modelle anzeigen
-docker compose exec ollama ollama list
-
-# Alternatives Modell herunterladen
-docker compose exec ollama ollama pull llama3.1:8b
-```
+- **Keine Cloud-Verbindung** - 100% offline
+- **PII-Erkennung** - spaCy NER (Personen, Orte, Organisationen)
+- **Audit-Log** - Append-only (immutable)
+- **DSGVO Löschrecht** - Permanente Deletion via UI
+- **Verschlüsselung** - Optional via Docker Secrets
 
 ---
 
-## 📖 API Dokumentation
+## 🆘 Troubleshooting
 
-Nach dem Start verfügbar unter: **http://localhost:8000/docs**
-
-### Wichtige Endpoints
-
-| Endpoint | Methode | Beschreibung |
-|----------|---------|--------------|
-| `/health` | GET | System-Status |
-| `/chat` | POST | Chat mit LLM |
-| `/chat/stream` | POST | Streaming Chat |
-| `/documents/upload` | POST | Dokument hochladen |
-| `/documents` | GET | Alle Dokumente |
-| `/documents/{id}` | DELETE | Dokument löschen (DSGVO) |
-| `/compliance/stats` | GET | Compliance Statistiken |
-| `/compliance/audit` | GET | Audit Log |
-
----
-
-## 🔒 Sicherheit & Compliance
-
-### DSGVO Konformität
-
-- ✅ **Keine Datenübertragung**: Alle Verarbeitung lokal
-- ✅ **Recht auf Löschung**: DELETE Endpoints implementiert
-- ✅ **Audit Trail**: Alle Aktionen werden protokolliert
-- ✅ **PII-Schutz**: Automatische Erkennung & Maskierung
-
-### EU AI Act
-
-- ✅ **Risikokategorie**: Minimal (Dokumentenanalyse)
-- ✅ **Transparenz**: KI-Nutzung gekennzeichnet
-- ✅ **Keine verbotenen Praktiken**
-
----
-
-## 🛠️ Entwicklung
-
-### Backend Tests
-
+**Backend startet nicht:**
 ```bash
-cd backend
-pip install -e ".[dev]"
-pytest tests/ -v
+docker-compose -f deploy/docker-compose.yml logs backend
 ```
 
-### spaCy Modell installieren
+**Ollama nicht erreichbar:**
+- Prüfe: `curl http://localhost:11434/api/tags`
+- Starte: `ollama serve`
+- Windows/macOS: Nutze `host.docker.internal:11434`
 
+**Port 8501 bereits belegt:**
 ```bash
-python -m spacy download de_core_news_lg
+# Ändere Port in deploy/docker-compose.yml:
+ports:
+  - "8502:8501"  # Dann: http://localhost:8502
 ```
 
 ---
 
 ## 📝 Lizenz
 
-MIT License - Siehe [LICENSE](LICENSE)
+Proprietär - SentinelAI Box © 2026
 
 ---
 
-## 🤝 Support
+## 👨‍💻 Support
 
-Bei Fragen oder Problemen erstellen Sie ein Issue oder kontaktieren Sie uns unter support@sentinell.ai
+Bei Fragen oder Problemen:
+- Logs prüfen: `docker-compose logs`
+- Health-Check: `curl http://localhost:8000/health`
+- WebUI: `http://localhost:8501`

@@ -217,8 +217,13 @@ class DocumentService:
             
             return "\n\n".join(text_parts)
         except Exception as e:
-            logger.error(f"PDF extraction error: {e}")
-            return None
+            error_msg = str(e)
+            if "invalid pdf header" in error_msg.lower() or "eof marker" in error_msg.lower():
+                logger.error(f"PDF file is corrupted or invalid: {e}")
+                raise ValueError(f"PDF-Datei ist beschädigt oder ungültig. Bitte verwenden Sie eine gültige PDF-Datei.")
+            else:
+                logger.error(f"PDF extraction error: {e}")
+                raise ValueError(f"PDF-Extraktion fehlgeschlagen: {error_msg}")
     
     def _extract_docx(self, content: bytes) -> Optional[str]:
         """Extract text from DOCX."""
