@@ -31,11 +31,16 @@ services:
     environment:
       - SERVICE_TYPE=frontend
       - API_BASE=http://localhost:8000
-    network_mode: "host"
+    ports:
+      - "8501:8501"
+    networks:
+      - sentinel-bridge
+    depends_on:
+      - backend
     restart: unless-stopped
 
 networks:
-  sentinelai-network:
+  sentinel-bridge:
     driver: bridge
 
 volumes:

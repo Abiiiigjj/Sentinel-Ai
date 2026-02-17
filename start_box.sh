@@ -35,11 +35,33 @@ fi
 mkdir -p data/vectorstore data/documents data/audit logs
 
 echo ""
+echo "🧹 Cleanup alter Container..."
+
+# CRITICAL FIX: Always cleanup old containers to prevent ContainerConfig errors
+# This is necessary because docker-compose recreate can fail with ContainerConfig KeyError
+cd "$(dirname "$0")"
+
+# Stop and remove old SentinelAI containers if they exist
+echo "   Stoppe alte Container..."
+docker-compose -f deploy/docker-compose.yml down 2>/dev/null || true
+
+# Remove any orphaned containers with sentinelai in name
+OLD_CONTAINERS=$(docker ps -a --format "{{.ID}} {{.Names}}" | grep -i sentinel | awk '{print $1}' || true)
+if [ ! -z "$OLD_CONTAINERS" ]; then
+    echo "   Entferne Zombie-Container..."
+    echo "$OLD_CONTAINERS" | xargs docker rm -f 2>/dev/null || true
+fi
+
+# Prune unused networks to avoid conflicts
+echo "   Prune Networks..."
+docker network prune -f > /dev/null 2>&1 || true
+
+echo "✅ Cleanup abgeschlossen"
+echo ""
 echo "🚀 Starte SentinelAI Box..."
 echo ""
 
-# Build and start containers
-cd "$(dirname "$0")"
+# Build and start containers (fresh start, no recreation issues)
 docker-compose -f deploy/docker-compose.yml up -d --build
 
 echo ""

@@ -16,7 +16,7 @@ sys.path.insert(0, str(backend_path))
 from services.database_service import DatabaseService
 
 # ============== CONFIG ==============
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+API_BASE = os.getenv("API_BASE", "http://backend:8000")
 
 st.set_page_config(
     page_title="SentinelAI Box",

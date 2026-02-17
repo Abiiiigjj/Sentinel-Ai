@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     )
     
     # Ollama Configuration
-    OLLAMA_HOST: str = "http://localhost:11434"
+    OLLAMA_HOST: str = "http://host.docker.internal:11434"
     LLM_MODEL: str = "mistral-nemo:12b-instruct-2407-q4_K_M"
     EMBEDDING_MODEL: str = "nomic-embed-text"
     
