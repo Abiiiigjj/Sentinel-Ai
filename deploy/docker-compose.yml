@@ -39,6 +39,23 @@ services:
       - backend
     restart: unless-stopped
 
+  watcher:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: sentinelai-watcher
+    environment:
+      - SERVICE_TYPE=watcher
+      - WATCH_DIR=/app/inbox
+      - API_BASE=http://localhost:8000
+    volumes:
+      - ../inbox:/app/inbox
+      - ../data:/app/data
+    network_mode: "host"
+    restart: unless-stopped
+    depends_on:
+      - backend
+
 networks:
   sentinel-bridge:
     driver: bridge

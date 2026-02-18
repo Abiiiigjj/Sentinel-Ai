@@ -94,6 +94,17 @@ rm -rf data/
 
 ---
 
+## 📚 Dokumentation
+
+| Dokument | Beschreibung |
+|----------|-------------|
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Alle Phasen – was getan wurde, was noch kommt |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System-Architektur und Komponenten |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Betrieb, Starten, Stoppen, Troubleshooting |
+| [docs/PHASE2_MAGIC_INBOX.md](docs/PHASE2_MAGIC_INBOX.md) | Implementierungsplan: Folder Watcher |
+
+---
+
 ## 📁 Verzeichnisstruktur
 
 ```

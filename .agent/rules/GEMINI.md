@@ -1,0 +1,1 @@
+/home/ahmet/.gemini/GEMINI.md
