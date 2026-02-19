@@ -38,6 +38,7 @@ class DocumentService:
         pii_service,
         llm_service,
         audit_service,
+        ocr_service=None,
         documents_dir: str | Path = "./data/documents",
         chunk_size: int = 500,
         chunk_overlap: int = 50
@@ -46,6 +47,7 @@ class DocumentService:
         self.pii_service = pii_service
         self.llm_service = llm_service
         self.audit_service = audit_service
+        self.ocr_service = ocr_service
         
         self.documents_dir = Path(documents_dir)
         self.documents_dir.mkdir(parents=True, exist_ok=True)
@@ -100,12 +102,20 @@ class DocumentService:
         
         logger.info(f"Processing document: {filename} (ID: {document_id})")
         
-        # 1. Extract text from document
-        text = await self._extract_text(content, file_type)
+        # Track OCR usage
+        ocr_used = False
+        ocr_confidence = None
+        
+        # 1. Extract text from document (with OCR fallback)
+        text, ocr_result = await self._extract_text(content, file_type)
+        if ocr_result and ocr_result.ocr_used:
+            ocr_used = True
+            ocr_confidence = ocr_result.confidence
+        
         if not text:
             raise ValueError(f"Could not extract text from {filename}")
         
-        logger.info(f"Extracted {len(text)} characters from {filename}")
+        logger.info(f"Extracted {len(text)} characters from {filename} (OCR: {ocr_used})")
         
         # 2. Split into chunks
         chunks = self._chunk_text(text)
@@ -140,6 +150,7 @@ class DocumentService:
                 "chunk_index": i,
                 "total_chunks": len(masked_chunks),
                 "pii_masked": pii_detected,
+                "ocr_used": ocr_used,
                 "uploaded_at": datetime.utcnow().isoformat()
             }
             for i in range(len(masked_chunks))
@@ -162,6 +173,8 @@ class DocumentService:
             "character_count": len(text),
             "pii_detected": pii_detected,
             "pii_summary": pii_summary,
+            "ocr_used": ocr_used,
+            "ocr_confidence": ocr_confidence,
             "user_id": user_id
         }
         self._save_metadata()
@@ -170,11 +183,13 @@ class DocumentService:
         await self.audit_service.log(
             user_id=user_id,
             action="document_processed",
-            details=f"Document '{filename}' processed: {len(chunks)} chunks, PII: {pii_detected}",
+            details=f"Document '{filename}' processed: {len(chunks)} chunks, PII: {pii_detected}, OCR: {ocr_used}",
             metadata={
                 "document_id": document_id,
                 "chunks": len(chunks),
-                "pii_detected": pii_detected
+                "pii_detected": pii_detected,
+                "ocr_used": ocr_used,
+                "ocr_confidence": ocr_confidence
             }
         )
         
@@ -183,28 +198,48 @@ class DocumentService:
             "filename": filename,
             "chunk_count": len(chunks),
             "pii_detected": pii_detected,
-            "pii_summary": pii_summary
+            "pii_summary": pii_summary,
+            "ocr_used": ocr_used,
+            "ocr_confidence": ocr_confidence
         }
     
-    async def _extract_text(self, content: bytes, file_type: str) -> Optional[str]:
-        """Extract text from document based on file type."""
+    async def _extract_text(self, content: bytes, file_type: str) -> tuple[Optional[str], Optional[object]]:
+        """
+        Extract text from document based on file type.
+        
+        Returns:
+            Tuple of (extracted_text, ocr_result_or_None)
+        """
         file_type = file_type.lower()
         
         if file_type == ".pdf":
             return self._extract_pdf(content)
         elif file_type in [".docx", ".doc"]:
-            return self._extract_docx(content)
+            return self._extract_docx(content), None
         elif file_type in [".txt", ".md"]:
-            return content.decode("utf-8", errors="ignore")
+            return content.decode("utf-8", errors="ignore"), None
+        elif file_type in [".png", ".jpg", ".jpeg", ".tiff", ".tif"]:
+            return self._extract_image(content)
         else:
             logger.warning(f"Unsupported file type: {file_type}")
-            return None
+            return None, None
     
-    def _extract_pdf(self, content: bytes) -> Optional[str]:
-        """Extract text from PDF."""
+    def _extract_image(self, content: bytes) -> tuple[Optional[str], Optional[object]]:
+        """Extract text from an image file using OCR."""
+        if not self.ocr_service:
+            logger.error("OCR service not available for image processing")
+            return None, None
+        
+        ocr_result = self.ocr_service.ocr_image(content)
+        if ocr_result.text:
+            return ocr_result.text, ocr_result
+        return None, ocr_result
+    
+    def _extract_pdf(self, content: bytes) -> tuple[Optional[str], Optional[object]]:
+        """Extract text from PDF, with automatic OCR fallback for scanned documents."""
         if not PDF_AVAILABLE:
             logger.error("PDF extraction not available")
-            return None
+            return None, None
         
         try:
             reader = PdfReader(BytesIO(content))
@@ -215,7 +250,21 @@ class DocumentService:
                 if page_text:
                     text_parts.append(page_text)
             
-            return "\n\n".join(text_parts)
+            extracted_text = "\n\n".join(text_parts)
+            
+            # Check if PDF is scanned (little/no extractable text)
+            if self.ocr_service and self.ocr_service.is_scanned_pdf(
+                extracted_text, len(reader.pages)
+            ):
+                logger.info("📸 PDF hat wenig Text → OCR-Fallback wird gestartet...")
+                ocr_result = self.ocr_service.ocr_pdf(content)
+                if ocr_result.text:
+                    return ocr_result.text, ocr_result
+                # OCR failed, return whatever pypdf got
+                logger.warning("OCR lieferte keinen Text, nutze pypdf-Ergebnis")
+            
+            return extracted_text, None
+            
         except Exception as e:
             error_msg = str(e)
             if "invalid pdf header" in error_msg.lower() or "eof marker" in error_msg.lower():

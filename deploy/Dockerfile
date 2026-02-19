@@ -7,6 +7,12 @@ FROM python:3.11-slim as base
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

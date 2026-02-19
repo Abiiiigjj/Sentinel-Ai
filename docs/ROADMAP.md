@@ -10,7 +10,7 @@
 |-------|------|--------|-----------|
 | 1 | 🏰 Fortress Mode | ✅ **ABGESCHLOSSEN** | Kritisch |
 | 2 | 📥 Magic Inbox | ⏳ Ausstehend | Hoch |
-| 3 | 👁️ Real World Vision | ⏳ Ausstehend | Hoch |
+| 3 | 👁️ Real World Vision | ✅ **ABGESCHLOSSEN** | Hoch |
 | 4 | 🛡️ Compliance Shield | ⏳ Ausstehend | Gesetzlich erforderlich |
 | 5 | 🧹 Clean Slate | ⏳ Ausstehend | Deployment |
 
@@ -77,24 +77,34 @@ watcher:
 
 ---
 
-## ⏳ Phase 3: Real World Vision – AUSSTEHEND
+## ✅ Phase 3: Real World Vision – ABGESCHLOSSEN
 
 **Ziel:** OCR für gescannte Dokumente und Bilder
 
-### Was zu tun ist
+### Was wurde gemacht
 
-- [ ] `tesseract-ocr` in Dockerfile installieren
-- [ ] `pytesseract` Python-Wrapper integrieren
-- [ ] Sprachen: Deutsch + Englisch (`deu+eng`)
-- [ ] Automatische Erkennung: Ist das Dokument gescannt?
-- [ ] Pre-Processing: Bildoptimierung vor OCR (Kontrast, Rotation)
-- [ ] Qualitäts-Score für OCR-Ergebnis
+- `tesseract-ocr` + Sprach-Packs (`deu`, `eng`) im Dockerfile installiert
+- `poppler-utils` für PDF→Bild Konvertierung installiert
+- `pytesseract`, `Pillow`, `pdf2image` als Python-Dependencies hinzugefügt
+- Neuer `OCRService` mit Scanned-PDF-Erkennung, Bild-OCR, Pre-Processing
+- Automatischer OCR-Fallback in `DocumentService._extract_pdf()` wenn < 50 Zeichen/Seite
+- Bild-Upload (.png, .jpg, .jpeg, .tiff) im Upload-Endpoint freigeschaltet
+- OCR-Metadaten (`ocr_used`, `ocr_confidence`) in API-Response und Audit-Log
 
-### Betroffene Dateien
+### Geänderte Dateien
 
-- `deploy/Dockerfile` – Tesseract installieren
-- `src/backend/services/document_service.py` – OCR-Pipeline
-- `src/backend/requirements.txt` – `pytesseract` hinzufügen
+- `deploy/Dockerfile` – Tesseract, poppler, libgl1 installiert
+- `src/backend/requirements.txt` – pytesseract, Pillow, pdf2image
+- `src/backend/services/ocr_service.py` – **NEU** OCR-Pipeline
+- `src/backend/services/document_service.py` – OCR-Integration + Bild-Extraktion
+- `src/backend/main.py` – OCR-Service Init, Bild-Upload, Response-Felder
+- `src/backend/utils/config.py` – OCR-Konfiguration
+
+### Ergebnis
+
+```
+INFO:services.ocr_service:✅ OCR Service ready – Tesseract 5.5.0, Sprachen: deu+eng
+```
 
 ---
 

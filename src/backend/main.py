@@ -21,6 +21,7 @@ from services.pii_service import PIIService
 from services.audit_service import AuditService
 from services.nlp_analysis_service import NLPAnalysisService  # type: ignore[import]
 from services.database_service import DatabaseService
+from services.ocr_service import OCRService
 from utils.config import settings
 
 # Logging
@@ -35,6 +36,7 @@ pii_service: Optional[PIIService] = None
 audit_service: Optional[AuditService] = None
 nlp_service: Optional[NLPAnalysisService] = None
 database_service: Optional[DatabaseService] = None
+ocr_service: Optional[OCRService] = None
 
 # Ollama connection status
 ollama_connected: bool = False
@@ -76,7 +78,7 @@ async def _wait_for_ollama(llm: LLMService, max_retries: int = 5) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager - initialize and cleanup services."""
-    global llm_service, document_service, vector_store, pii_service, audit_service, nlp_service, database_service, ollama_connected
+    global llm_service, document_service, vector_store, pii_service, audit_service, nlp_service, database_service, ocr_service, ollama_connected
     
     logger.info("🚀 Initializing SentinelAI Backend...")
     
@@ -93,11 +95,17 @@ async def lifespan(app: FastAPI):
         embedding_model=settings.EMBEDDING_MODEL
     )
     nlp_service = NLPAnalysisService(llm_service=llm_service)
+    ocr_service = OCRService(
+        languages=settings.OCR_LANGUAGES,
+        min_text_threshold=settings.OCR_MIN_TEXT_THRESHOLD,
+        ocr_enabled=settings.OCR_ENABLED,
+    )
     document_service = DocumentService(
         vector_store=vector_store,
         pii_service=pii_service,
         llm_service=llm_service,
-        audit_service=audit_service
+        audit_service=audit_service,
+        ocr_service=ocr_service
     )
     
     # Check Ollama connection with retry loop
@@ -164,6 +172,8 @@ class DocumentResponse(BaseModel):
     chunk_count: int
     pii_detected: bool
     pii_summary: Optional[str] = None
+    ocr_used: bool = False
+    ocr_confidence: Optional[float] = None
 
 
 class ComplianceStats(BaseModel):
@@ -303,7 +313,7 @@ async def upload_document(
         raise HTTPException(503, "Document service not available")
     
     # Validate file type
-    allowed_types = {".pdf", ".docx", ".doc", ".txt", ".md"}
+    allowed_types = {".pdf", ".docx", ".doc", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tiff", ".tif"}
     file_ext = os.path.splitext(file.filename)[1].lower()
     
     # Handle edge case: files starting with . (like .txt) - treat as extension-less
@@ -348,7 +358,9 @@ async def upload_document(
         uploaded_at=datetime.utcnow(),
         chunk_count=result["chunk_count"],
         pii_detected=result["pii_detected"],
-        pii_summary=result.get("pii_summary")
+        pii_summary=result.get("pii_summary"),
+        ocr_used=result.get("ocr_used", False),
+        ocr_confidence=result.get("ocr_confidence")
     )
 
 

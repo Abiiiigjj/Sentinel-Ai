@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50  # Overlap between chunks
     MAX_DOCUMENT_SIZE_MB: int = 50
     
+    # OCR Configuration (Phase 3)
+    OCR_ENABLED: bool = True
+    OCR_LANGUAGES: str = "deu+eng"  # Tesseract language codes
+    OCR_MIN_TEXT_THRESHOLD: int = 50  # Min chars/page to consider non-scanned
+    
     # Security
     ENCRYPTION_ENABLED: bool = True
     

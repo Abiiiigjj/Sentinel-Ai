@@ -6,35 +6,28 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-backend
+    network_mode: "host"       # Nutzt Host-Netzwerk (wichtig für Localhost-Bindung)
     environment:
       - SERVICE_TYPE=backend
-      - OLLAMA_HOST=http://localhost:11434
+      - OLLAMA_HOST=http://127.0.0.1:11434  # Greift auf lokales Ollama zu
       - DATA_DIR=/app/data
       - VECTOR_STORE_DIR=/app/data/vectorstore
     volumes:
       - ../data:/app/data
       - ../logs:/app/logs
-    network_mode: "host"
     restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   frontend:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-frontend
+    network_mode: "host"       # Nutzt Host-Netzwerk
     environment:
       - SERVICE_TYPE=frontend
-      - API_BASE=http://localhost:8000
-    ports:
-      - "8501:8501"
-    networks:
-      - sentinel-bridge
+      - API_BASE=http://127.0.0.1:8000  # Spricht Backend sicher via Localhost an
+    volumes:
+      - ../data:/app/data
     depends_on:
       - backend
     restart: unless-stopped
@@ -44,22 +37,13 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-watcher
+    network_mode: "host"       # Nutzt Host-Netzwerk
     environment:
       - SERVICE_TYPE=watcher
-      - WATCH_DIR=/app/inbox
-      - API_BASE=http://localhost:8000
+      - INBOX_DIR=/app/data/inbox
+      - PROCESSED_DIR=/app/data/processed
+      - ERROR_DIR=/app/data/error
+      - API_URL=http://127.0.0.1:8000  # Upload via Localhost
     volumes:
-      - ../inbox:/app/inbox
-      - ../data:/app/data
-    network_mode: "host"
+      - ../data:/app/data      # Mapped Host-Ordner für Scanner
     restart: unless-stopped
-    depends_on:
-      - backend
-
-networks:
-  sentinel-bridge:
-    driver: bridge
-
-volumes:
-  sentinelai-data:
-    driver: local
