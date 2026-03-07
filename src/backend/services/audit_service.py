@@ -28,7 +28,7 @@ class AuditService:
         logger.info(f"Audit service initialized at {self.audit_dir}")
     
     def _init_database(self):
-        """Initialize SQLite database for audit logs."""
+        """Initialize SQLite database for audit logs with immutability protection."""
         with self._get_db() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
@@ -42,21 +42,38 @@ class AuditService:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             # Create index for efficient querying
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_audit_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_audit_timestamp
                 ON audit_log(timestamp DESC)
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_audit_user 
+                CREATE INDEX IF NOT EXISTS idx_audit_user
                 ON audit_log(user_id)
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_audit_action 
+                CREATE INDEX IF NOT EXISTS idx_audit_action
                 ON audit_log(action)
             """)
+
+            # SECURITY: Immutability triggers — prevent UPDATE and DELETE on audit_log
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+                BEFORE UPDATE ON audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'SECURITY: Audit log entries are immutable and cannot be modified');
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
+                BEFORE DELETE ON audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'SECURITY: Audit log entries are immutable and cannot be deleted');
+                END
+            """)
             conn.commit()
+            logger.info("Audit database initialized with immutability triggers")
     
     @contextmanager
     def _get_db(self):
@@ -199,35 +216,10 @@ class AuditService:
         """
         return await self.get_entries(limit=10000, user_id=user_id)
     
-    async def delete_user_entries(self, user_id: str) -> int:
-        """
-        Delete all audit entries for a user (DSGVO right to erasure).
-        Note: This should be used carefully and may conflict with legal retention requirements.
-        
-        Args:
-            user_id: User whose entries should be deleted
-            
-        Returns:
-            Number of entries deleted
-        """
-        # First, log this deletion request (meta-audit)
-        await self.log(
-            user_id="admin",
-            action="gdpr_audit_delete",
-            details=f"Deleting audit entries for user: {user_id}"
-        )
-        
-        with self._get_db() as conn:
-            cursor = conn.execute(
-                "DELETE FROM audit_log WHERE user_id = ? AND action != 'gdpr_audit_delete'",
-                (user_id,)
-            )
-            conn.commit()
-            
-            deleted_count = cursor.rowcount
-            logger.info(f"Deleted {deleted_count} audit entries for user {user_id}")
-            
-            return deleted_count
+    # NOTE: Audit log entries are immutable by design (SQLite triggers).
+    # DSGVO Art. 17 (Right to Erasure) does NOT override legal retention
+    # requirements (HGB 10 years, AO 6-10 years for tax-relevant documents).
+    # Audit logs are pseudonymized, not deleted. See: export_for_user().
     
     async def get_user_activity_summary(self, user_id: str) -> dict:
         """Get activity summary for a specific user."""

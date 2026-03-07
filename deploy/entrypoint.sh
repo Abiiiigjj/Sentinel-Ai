@@ -20,9 +20,9 @@ elif [ "$SERVICE_TYPE" = "frontend" ]; then
     exec streamlit run src/frontend/app.py --server.port=8501 --server.address=0.0.0.0
 
 elif [ "$SERVICE_TYPE" = "watcher" ]; then
-    echo "👀 Starting SentinelAI Inbox Watcher..."
-    # Sicherstellen, dass die Ordner existieren
-    mkdir -p /app/data/inbox /app/data/processed /app/data/error
+    echo "Starting SentinelAI Inbox Watcher..."
+    # Ensure watch directories exist (may fail if not owner, that's ok)
+    mkdir -p /app/data/inbox /app/data/processed /app/data/error 2>/dev/null || true
     cd /app
     exec python src/watcher/watcher.py
 

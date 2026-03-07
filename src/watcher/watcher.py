@@ -54,13 +54,13 @@ def _ensure_dirs() -> tuple[Path, Path]:
 
 
 def _set_permissions(filepath: Path) -> None:
-    """Set file permissions to 666 so the host user can read/write/delete."""
+    """Set file permissions to 644 (owner rw, group/other read-only)."""
     try:
         filepath.chmod(stat.S_IRUSR | stat.S_IWUSR |
-                       stat.S_IRGRP | stat.S_IWGRP |
-                       stat.S_IROTH | stat.S_IWOTH)  # 0o666
+                       stat.S_IRGRP |
+                       stat.S_IROTH)  # 0o644
     except OSError as exc:
-        logger.warning(f"⚠️ chmod 666 fehlgeschlagen für {filepath}: {exc}")
+        logger.warning(f"chmod 644 fehlgeschlagen fuer {filepath}: {exc}")
 
 
 def _wait_for_stable_size(filepath: str, interval: float = 0.5) -> bool:

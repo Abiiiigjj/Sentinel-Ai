@@ -5,7 +5,6 @@ Handles chat, streaming, and embeddings with full offline capability
 import logging
 from typing import AsyncGenerator, Optional
 import httpx
-import ollama
 from ollama import AsyncClient
 
 logger = logging.getLogger(__name__)
@@ -113,7 +112,7 @@ class LLMService:
                         
         except Exception as e:
             logger.error(f"Stream chat error: {e}")
-            yield f"\n[Error: {str(e)}]"
+            yield "\n[Fehler bei der Verarbeitung. Bitte erneut versuchen.]"
     
     async def generate_embedding(self, text: str) -> list[float]:
         """

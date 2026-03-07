@@ -43,10 +43,10 @@ class Settings(BaseSettings):
     OCR_MIN_TEXT_THRESHOLD: int = 50  # Min chars/page to consider non-scanned
     
     # Security
-    ENCRYPTION_ENABLED: bool = True
-    
+    MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB hard limit
+
     # Server
-    HOST: str = "0.0.0.0"
+    HOST: str = "127.0.0.1"
     PORT: int = 8000
     DEBUG: bool = False
     

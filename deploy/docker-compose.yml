@@ -1,33 +1,41 @@
-version: '3.8'
-
 services:
   backend:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-backend
-    network_mode: "host"       # Nutzt Host-Netzwerk (wichtig für Localhost-Bindung)
+    network_mode: "host"
     environment:
       - SERVICE_TYPE=backend
-      - OLLAMA_HOST=http://127.0.0.1:11434  # Greift auf lokales Ollama zu
+      - OLLAMA_HOST=http://127.0.0.1:11434
       - DATA_DIR=/app/data
       - VECTOR_STORE_DIR=/app/data/vectorstore
     volumes:
       - ../data:/app/data
       - ../logs:/app/logs
+    mem_limit: 2g
+    memswap_limit: 3g
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   frontend:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-frontend
-    network_mode: "host"       # Nutzt Host-Netzwerk
+    network_mode: "host"
     environment:
       - SERVICE_TYPE=frontend
-      - API_BASE=http://127.0.0.1:8000  # Spricht Backend sicher via Localhost an
+      - API_BASE=http://127.0.0.1:8000
     volumes:
-      - ../data:/app/data
+      - ../data:/app/data:ro
+    mem_limit: 512m
+    memswap_limit: 768m
     depends_on:
       - backend
     restart: unless-stopped
@@ -37,13 +45,13 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: sentinelai-watcher
-    network_mode: "host"       # Nutzt Host-Netzwerk
+    network_mode: "host"
     environment:
       - SERVICE_TYPE=watcher
-      - INBOX_DIR=/app/data/inbox
-      - PROCESSED_DIR=/app/data/processed
-      - ERROR_DIR=/app/data/error
-      - API_URL=http://127.0.0.1:8000  # Upload via Localhost
+      - WATCH_DIR=/app/data/inbox
+      - API_BASE=http://127.0.0.1:8000
     volumes:
-      - ../data:/app/data      # Mapped Host-Ordner für Scanner
+      - ../data:/app/data
+    mem_limit: 256m
+    memswap_limit: 384m
     restart: unless-stopped

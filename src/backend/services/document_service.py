@@ -31,7 +31,7 @@ except ImportError:
 
 class DocumentService:
     """Service for document processing and management."""
-    
+
     def __init__(
         self,
         vector_store,
@@ -39,6 +39,7 @@ class DocumentService:
         llm_service,
         audit_service,
         ocr_service=None,
+        database_service=None,
         documents_dir: str | Path = "./data/documents",
         chunk_size: int = 500,
         chunk_overlap: int = 50
@@ -48,17 +49,18 @@ class DocumentService:
         self.llm_service = llm_service
         self.audit_service = audit_service
         self.ocr_service = ocr_service
-        
+        self.database_service = database_service
+
         self.documents_dir = Path(documents_dir)
         self.documents_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        
-        # Document metadata storage (SQLite or JSON file)
+
+        # Legacy JSON metadata (kept for migration, DB is primary source)
         self.metadata_file = self.documents_dir / "documents.json"
         self.documents_metadata = self._load_metadata()
-        
+
         logger.info(f"Document service initialized. {len(self.documents_metadata)} documents indexed.")
     
     def _load_metadata(self) -> dict:
@@ -163,8 +165,8 @@ class DocumentService:
             ids=chunk_ids
         )
         
-        # 6. Save document metadata
-        self.documents_metadata[document_id] = {
+        # 6. Save document metadata (DB is primary, JSON is legacy backup)
+        doc_metadata = {
             "id": document_id,
             "filename": filename,
             "file_type": file_type,
@@ -177,7 +179,20 @@ class DocumentService:
             "ocr_confidence": ocr_confidence,
             "user_id": user_id
         }
+        self.documents_metadata[document_id] = doc_metadata
         self._save_metadata()
+
+        # Write to SQLite database (single source of truth)
+        if self.database_service:
+            self.database_service.add_document(
+                doc_id=document_id,
+                filename=filename,
+                file_size=len(content),
+                file_type=file_type,
+                chunk_count=len(chunks),
+                pii_detected=pii_detected,
+                pii_summary=pii_summary or ""
+            )
         
         # 7. Audit log
         await self.audit_service.log(
@@ -367,19 +382,31 @@ class DocumentService:
     
     async def delete_document(self, document_id: str) -> bool:
         """
-        Delete a document and all its chunks (DSGVO: Right to erasure).
+        DSGVO-compliant complete deletion of a document.
+        Removes data from: VectorStore (ChromaDB) + JSON metadata + SQLite DB.
         """
-        if document_id not in self.documents_metadata:
+        # Check if document exists in either data source
+        in_json = document_id in self.documents_metadata
+        in_db = False
+        if self.database_service:
+            in_db = self.database_service.get_document(document_id) is not None
+
+        if not in_json and not in_db:
             return False
-        
-        # Delete from vector store
+
+        # 1. Delete from vector store (embeddings + chunks)
         await self.vector_store.delete_by_document_id(document_id)
-        
-        # Delete metadata
-        del self.documents_metadata[document_id]
-        self._save_metadata()
-        
-        logger.info(f"Deleted document: {document_id}")
+
+        # 2. Delete from JSON metadata (legacy)
+        if in_json:
+            del self.documents_metadata[document_id]
+            self._save_metadata()
+
+        # 3. Delete from SQLite database (primary)
+        if in_db and self.database_service:
+            self.database_service.delete_document_complete(document_id)
+
+        logger.info(f"DSGVO deletion complete for document: {document_id}")
         return True
     
     async def get_stats(self) -> dict:

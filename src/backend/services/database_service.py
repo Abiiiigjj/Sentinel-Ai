@@ -298,8 +298,36 @@ class DatabaseService:
             logger.error(f"Error getting audit logs: {e}")
             return []
     
-    # NOTE: No delete_audit_log() method - audit logs are immutable!
-    
+    # NOTE: No delete_audit_log() method - audit logs are immutable (enforced by SQLite triggers)!
+
+    # ========== DOCUMENT DELETION (DSGVO) ==========
+
+    def delete_document_complete(self, doc_id: str) -> dict:
+        """
+        DSGVO-compliant complete deletion of a document.
+        Deletes from documents table and logs the deletion in audit.
+
+        Returns:
+            dict with deletion status info
+        """
+        doc = self.get_document(doc_id)
+        if not doc:
+            return {"deleted": False, "reason": "not_found"}
+
+        filename = doc.get("filename", "unknown")
+
+        # Delete from documents table
+        self.delete_document(doc_id)
+
+        # Log deletion in audit (immutable record of the deletion event)
+        self.add_audit_log(
+            action="gdpr_document_deletion",
+            document_id=doc_id,
+            metadata=f"DSGVO-Loeschung: {filename} (DB + VectorStore + Dateien)"
+        )
+
+        return {"deleted": True, "filename": filename, "document_id": doc_id}
+
     # ========== STATISTICS ==========
     
     def get_statistics(self) -> Dict[str, Any]:

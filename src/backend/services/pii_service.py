@@ -53,17 +53,19 @@ class PIIResult:
 class PIIService:
     """Service for detecting and masking personally identifiable information."""
     
-    # German-specific regex patterns
+    # German-specific regex patterns (tuned to minimize false positives)
     PATTERNS = {
         "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
         "phone_de": r'\b(?:\+49|0049|0)[\s\-]?(?:\d{2,4})[\s\-]?(?:\d{3,})[\s\-]?(?:\d{2,})\b',
         "iban": r'\b[A-Z]{2}\d{2}[\s]?(?:\d{4}[\s]?){4,7}\d{0,2}\b',
-        "bic": r'\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b',
-        "plz_de": r'\b\d{5}\b',  # German postal code
+        # BIC: require valid country code in positions 5-6 (ISO 3166-1)
+        "bic": r'\b[A-Z]{4}(?:DE|AT|CH|FR|GB|NL|BE|IT|ES|PL|CZ|SE|DK|NO|FI|LU|IE|PT)[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b',
+        # PLZ: only match 5-digit numbers preceded by typical address context
+        "plz_de": r'(?:(?:PLZ|Postleitzahl|^\s*D[\-\s]?)\s*)\b(\d{5})\b|\b(\d{5})\s+(?:[A-Z][a-z]+(?:berg|burg|heim|dorf|stadt|feld|hausen|bach|kirchen|wald|bruch|stein|furt|haven|horn|au|ow))\b',
         "date_de": r'\b(?:\d{1,2}[./]\d{1,2}[./]\d{2,4})\b',
-        "steuer_id": r'\b\d{2}[\s]?\d{3}[\s]?\d{3}[\s]?\d{3}\b',  # German tax ID
+        "steuer_id": r'\b\d{2}[\s]?\d{3}[\s]?\d{3}[\s]?\d{3}\b',  # German tax ID (11 digits)
         "sozialversicherung": r'\b\d{2}[\s]?\d{6}[\s]?[A-Z][\s]?\d{3}\b',  # German social security
-        "kreditkarte": r'\b(?:\d{4}[\s\-]?){3}\d{4}\b',  # Credit card
+        "kreditkarte": r'\b(?:\d{4}[\s\-]?){3}\d{4}\b',  # Credit card (16 digits)
         "ip_address": r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
     }
     
