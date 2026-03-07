@@ -1,6 +1,6 @@
 # SentinelAI Box - Production Ready
 
-**100% Lokale KI-Dokumentenverarbeitung für Kleinunternehmer**
+**100% Lokale KI-Dokumentenverarbeitung für Steuerberater und Buchhaltungsbüros**
 
 ## 🚀 Quick Start
 
@@ -16,7 +16,7 @@ Das war's! Die WebUI öffnet sich automatisch unter `http://localhost:8501`
 
 - **Docker & Docker Compose** installiert
 - **Ollama** (optional, für KI-Features): `ollama serve`
-- **8GB RAM** empfohlen
+- **16GB RAM** empfohlen
 - **10GB Festplattenspeicher**
 
 ### Installation
@@ -39,11 +39,11 @@ ollama serve
 
 ## 🛡️ Features
 
-✅ **DSGVO-konform** - Alle Daten bleiben lokal  
-✅ **PII-Erkennung** - Automatische Erkennung personenbezogener Daten  
-✅ **Semantische Suche** - RAG-basierte Dokumentensuche  
-✅ **Status-Workflow** - Neu → In Prüfung → Erledigt  
-✅ **Audit-Log** - Manipulationssicheres Compliance-Log  
+✅ **DSGVO-konform** - Alle Daten bleiben lokal
+✅ **PII-Erkennung** - Automatische Erkennung personenbezogener Daten
+✅ **Semantische Suche** - RAG-basierte Dokumentensuche
+✅ **Status-Workflow** - Neu → In Prüfung → Erledigt
+✅ **Audit-Log** - Durch SQLite-Trigger auf Datenbankebene geschützt (unveränderlich)
 ✅ **Kiosk-UI** - Touchscreen-optimiert, professionell  
 
 ---
@@ -61,9 +61,12 @@ SentinelAI Box
 │   ├── Cockpit (Übersicht)
 │   ├── Posteingang (Upload)
 │   └── Archiv (Suche)
+├── Watcher Service (Folder Watcher)
+│   └── Automatische Dokumentverarbeitung aus /inbox
 └── Data (persistent volume)
     ├── sentinel.db (Dokumente + Audit-Log)
     ├── vectorstore/ (Embeddings)
+    ├── inbox/ (Eingangsordner für Watcher)
     └── documents/ (Uploads)
 ```
 
@@ -111,11 +114,13 @@ rm -rf data/
 SentinelAi/
 ├── src/
 │   ├── backend/        # FastAPI Backend
-│   └── frontend/       # Streamlit WebUI
+│   ├── frontend/       # Streamlit WebUI
+│   └── watcher/        # Folder Watcher Service
 ├── data/              # Persistent (bleibt bei Updates)
 │   ├── sentinel.db
 │   ├── vectorstore/
-│   └── documents/
+│   ├── documents/
+│   └── inbox/         # Eingangsordner für Watcher
 ├── logs/              # System-Logs
 ├── deploy/            # Docker-Konfiguration
 │   ├── Dockerfile
@@ -130,9 +135,8 @@ SentinelAi/
 
 - **Keine Cloud-Verbindung** - 100% offline
 - **PII-Erkennung** - spaCy NER (Personen, Orte, Organisationen)
-- **Audit-Log** - Append-only (immutable)
+- **Audit-Log** - Durch SQLite-Trigger auf Datenbankebene geschützt (unveränderlich)
 - **DSGVO Löschrecht** - Permanente Deletion via UI
-- **Verschlüsselung** - Optional via Docker Secrets
 
 ---
 
