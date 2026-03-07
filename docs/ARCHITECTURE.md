@@ -30,7 +30,13 @@
 │  │   └──────────┘ └──────────┘ └────────┬─────────┘ │  │
 │  └─────────────────────────────────────┼─────────────┘  │
 │                                        │                 │
-│  ┌─────────────────────────────────────▼─────────────┐  │
+│  ┌────────────────────────────────────▼──────────────┐  │
+│  │   Watcher Service (Folder Monitoring)             │  │
+│  │   - Automatische Dokumentverarbeitung aus /inbox  │  │
+│  │   - Upload via API an Backend                     │  │
+│  └─────────────────────────────────────────────────┘   │
+│                                                          │
+│  ┌─────────────────────────────────────────────────┐   │
 │  │   Ollama Service (localhost:11434)                 │  │
 │  │   - mistral-nemo:12B (Analyse)                    │  │
 │  │   - nomic-embed-text (Embeddings)                 │  │
@@ -39,7 +45,8 @@
 │  📁 /data          📁 /logs                             │
 │     sentinel.db       app.log                           │
 │     vectorstore/      audit/                            │
-│     audit/                                              │
+│     inbox/            (Watcher-Eingang)                 │
+│     documents/                                          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -97,6 +104,10 @@ data/
 | GET | `/documents` | Alle Dokumente auflisten |
 | GET | `/documents/{id}` | Einzelnes Dokument |
 | DELETE | `/documents/{id}` | Dokument löschen |
+| PATCH | `/documents/{id}/status` | Status eines Dokuments ändern |
+| POST | `/documents/{id}/archive` | Dokument archivieren |
+| GET | `/documents/stats` | Dashboard-Statistiken |
+| GET | `/documents/list` | Dokumentenliste mit Filtern |
 | POST | `/chat` | LLM Chat |
 | POST | `/search` | Semantische Suche |
 | GET | `/audit` | Audit-Log abrufen |
@@ -137,4 +148,4 @@ frontend:
 
 ---
 
-*Zuletzt aktualisiert: 2026-02-18*
+*Zuletzt aktualisiert: 2026-03-07*
